@@ -1,0 +1,297 @@
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Image,
+} from 'react-native';
+import {
+  MenuProvider,
+  Menu,
+  MenuOptions,
+  MenuOption,
+  MenuTrigger,
+} from 'react-native-popup-menu';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackList, Article } from '../App';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Icon from 'react-native-vector-icons/Ionicons';
+
+const API_KEY = '5be5aeb4a81549c286af0b318e9eedeb';
+
+export default function HomeScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackList>>();
+  const [newslist, setNewslist] = useState<Article[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [showCategoryMenu, setShowCategoryMenu] = useState(false);
+  const [bookmarked, setBookmarked] = useState<Article[]>([]);
+  const flatListRef = useRef<FlatList<Article>>(null);
+
+  const fetchNews = async (categoryLabel?: string) => {
+    setLoading(true);
+    let url = `https://newsapi.org/v2/top-headlines?country=us&apiKey=5be5aeb4a81549c286af0b318e9eedeb`;
+
+    if (categoryLabel) {
+      const categoryMap: { [key: string]: string } = {
+        Politics: 'general',
+        Sports: 'sports',
+        Entertainment: 'entertainment',
+        Health: 'health',
+        Technology: 'technology',
+      };
+      const category = categoryMap[categoryLabel];
+      if (category) {
+        url += `&category=${category}`;
+      }
+    }
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+      setNewslist(data.articles || []);
+    } catch (error) {
+      console.error('Error fetching news:', error);
+      setNewslist([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadBookmarks = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('bookmarkedArticles');
+      const bookmarks = stored ? JSON.parse(stored) : [];
+      setBookmarked(bookmarks);
+    } catch (error) {
+      console.error('Failed to load bookmarks:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchNews();
+    loadBookmarks();
+  }, []);
+
+  const isBookmarked = (article: Article) =>
+    bookmarked.some((a: Article) => a.url === article.url);
+
+  const handleBookmark = async (article: Article) => {
+    try {
+      const stored = await AsyncStorage.getItem('bookmarkedArticles');
+      const bookmarks: Article[] = stored ? JSON.parse(stored) : [];
+
+      const updatedBookmarks = isBookmarked(article)
+        ? bookmarks.filter((a) => a.url !== article.url)
+        : [...bookmarks, article];
+
+      await AsyncStorage.setItem('bookmarkedArticles', JSON.stringify(updatedBookmarks));
+      setBookmarked(updatedBookmarks);
+    } catch (error) {
+      console.error('Bookmark error:', error);
+    }
+  };
+
+  const handleMenuSelect = (value: string) => {
+    if (value === 'Top Stories') {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      fetchNews();
+    } else if (value === 'Categories') {
+      setShowCategoryMenu(true);
+    } else if (value === 'Bookmarks') {
+      navigation.navigate('Bookmarks');
+    } else if (value === 'Profile') {
+      navigation.navigate('Profile');
+    } else if (value === 'Logout') {
+      navigation.navigate('Login');
+    }
+  };
+
+  const handleCategorySelect = (label: string) => {
+    setShowCategoryMenu(false);
+    fetchNews(label);
+  };
+
+  return (
+    <MenuProvider>
+      <View style={styles.header}>
+        <Text style={styles.headerText}>NewsFlick</Text>
+        <Menu>
+          <MenuTrigger>
+            <Text style={styles.menuTrigger}>☰</Text>
+          </MenuTrigger>
+          <MenuOptions>
+            {['Top Stories', 'Categories', 'Bookmarks', 'Profile', 'Logout'].map((item) => (
+              <MenuOption key={item} onSelect={() => handleMenuSelect(item)} text={item} />
+            ))}
+          </MenuOptions>
+        </Menu>
+      </View>
+
+      {showCategoryMenu && (
+        <View style={styles.categoryContainer}>
+          {['Politics', 'Sports', 'Entertainment', 'Health', 'Technology'].map((cat) => (
+            <TouchableOpacity
+              key={cat}
+              style={styles.categoryItem}
+              onPress={() => handleCategorySelect(cat)}
+            >
+              <Text style={styles.categoryText}>{cat}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6200EE" />
+          <Text style={styles.loadingText}>Loading news...</Text>
+        </View>
+      ) : newslist.length > 0 ? (
+        <FlatList
+          ref={flatListRef}
+          data={newslist}
+          keyExtractor={(_, index) => index.toString()}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.itemContainer}
+              onPress={() => navigation.navigate('Article', { article: item })}
+            >
+              {item.urlToImage && (
+                <Image source={{ uri: item.urlToImage }} style={styles.thumbnail} />
+              )}
+              <View style={styles.rowBetween}>
+                <Text style={styles.title}>{item.title}</Text>
+                <TouchableOpacity onPress={() => handleBookmark(item)}>
+                  <Icon
+                    name={isBookmarked(item) ? 'bookmark' : 'bookmark-outline'}
+                    size={24}
+                    color={isBookmarked(item) ? '#E91E63' : '#6200EE'}
+                  />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.metaContainer}>
+                <Text style={styles.author}>
+                  {item.author ? `By ${item.author}` : 'Unknown Author'}
+                </Text>
+                <Text style={styles.date}>
+                  {item.publishedAt
+                    ? new Date(item.publishedAt).toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })
+                    : ''}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+          contentContainerStyle={{ paddingBottom: 20 }}
+        />
+      ) : (
+        <Text style={styles.emptyText}>No articles found.</Text>
+      )}
+    </MenuProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: {
+    paddingTop: 50,
+    paddingBottom: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#6200EE',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  menuTrigger: {
+    fontSize: 24,
+    color: '#fff',
+    padding: 10,
+  },
+  categoryContainer: {
+    backgroundColor: '#f1f1f1',
+    padding: 10,
+  },
+  categoryItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderColor: '#ccc',
+  },
+  categoryText: {
+    fontSize: 16,
+  },
+  itemContainer: {
+    padding: 15,
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginTop: 15,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  thumbnail: {
+    width: '100%',
+    height: 180,
+    borderRadius: 8,
+    marginBottom: 10,
+    resizeMode: 'cover',
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#222',
+    flex: 1,
+    marginRight: 10,
+  },
+  metaContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  author: {
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  date: {
+    fontSize: 13,
+    color: '#666',
+  },
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 50,
+    fontSize: 16,
+    color: '#999',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 18,
+    color: '#6200EE',
+    fontWeight: '600',
+  },
+});
+
+
