@@ -1,0 +1,173 @@
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  Image,
+  StyleSheet,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackList, Article } from '../App';
+import Icon from 'react-native-vector-icons/Ionicons';
+
+export default function BookmarksScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackList>>();
+  const [bookmarkedArticles, setBookmarkedArticles] = useState<Article[]>([]);
+
+  const loadBookmarks = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('bookmarkedArticles');
+      const bookmarks = stored ? JSON.parse(stored) : [];
+      setBookmarkedArticles(bookmarks);
+    } catch (error) {
+      console.error('Error loading bookmarks:', error);
+    }
+  };
+
+  const removeBookmark = async (article: Article) => {
+    try {
+      const updated = bookmarkedArticles.filter((a) => a.url !== article.url);
+      await AsyncStorage.setItem('bookmarkedArticles', JSON.stringify(updated));
+      setBookmarkedArticles(updated);
+    } catch (error) {
+      console.error('Error removing bookmark:', error);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadBookmarks();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.headerRow}>
+        <Text style={styles.header}>Saved Articles</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Home')}>
+          <Text style={styles.backToHome}>← Home</Text>
+        </TouchableOpacity>
+      </View>
+
+      {bookmarkedArticles.length === 0 ? (
+        <Text style={styles.emptyText}>No bookmarked articles.</Text>
+      ) : (
+        <FlatList
+          data={bookmarkedArticles}
+          keyExtractor={(_, index) => index.toString()}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => navigation.navigate('Article', { article: item })}
+            >
+              {item.urlToImage && (
+                <Image source={{ uri: item.urlToImage }} style={styles.image} />
+              )}
+
+              <View style={styles.info}>
+                <Text style={styles.title} numberOfLines={2}>
+                  {item.title}
+                </Text>
+
+                <View style={styles.row}>
+                  <Text style={styles.meta}>
+                    {item.author ? `By ${item.author}` : 'Unknown Author'}
+                  </Text>
+                  <Text style={styles.meta}>
+                    {item.publishedAt
+                      ? new Date(item.publishedAt).toLocaleDateString('en-GB', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        })
+                      : ''}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity onPress={() => removeBookmark(item)}>
+                <Icon name="bookmark" size={22} color="#E91E63" />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          )}
+          contentContainerStyle={{ paddingBottom: 20 }}
+        />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    paddingTop: 50,
+    paddingHorizontal: 16,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  header: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#6200EE',
+  },
+  backToHome: {
+    fontSize: 16,
+    color: '#6200EE',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#f1f1f1',
+    borderRadius: 6,
+  },
+  card: {
+    backgroundColor: '#f9f9f9',
+    padding: 12,
+    marginBottom: 15,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  image: {
+    width: 80,
+    height: 80,
+    borderRadius: 6,
+  },
+  info: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 4,
+    color: '#333',
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  meta: {
+    fontSize: 12,
+    color: '#666',
+  },
+  emptyText: {
+    marginTop: 60,
+    textAlign: 'center',
+    fontSize: 16,
+    color: '#999',
+  },
+});
