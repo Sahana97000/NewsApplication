@@ -1,0 +1,86 @@
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackList } from '../App';
+
+type NavigationProp = NativeStackNavigationProp<RootStackList, 'Profile'>;
+
+export default function ProfileScreen() {
+  const navigation = useNavigation<NavigationProp>();
+  const [user, setUser] = useState<{ username: string; email: string } | null>(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const data = await AsyncStorage.getItem('currentUser');
+      if (data) {
+        setUser(JSON.parse(data));
+      }
+    };
+    loadUser();
+  }, []);
+
+  const handleLogout = async () => {
+    await AsyncStorage.removeItem('currentUser');
+    navigation.navigate('Login');
+  };
+
+  const handleEdit = () => {
+    navigation.navigate('EditProfile');
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Profile</Text>
+      {user ? (
+        <>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <Text style={styles.backText}>← Back</Text>
+            </TouchableOpacity>
+          <Text style={styles.info}>👤 Name: {user.username}</Text>
+          <Text style={styles.info}>📧 Email: {user.email}</Text>
+
+          <TouchableOpacity style={styles.button} onPress={handleEdit}>
+            <Text style={styles.buttonText}>Edit your details</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.logout} onPress={handleLogout}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <Text>Loading...</Text>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
+  title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', marginBottom: 30 },
+  info: { fontSize: 18, marginBottom: 15 },
+  button: {
+    backgroundColor: '#6200EE',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 20,
+  },
+  backText: {
+    color: '#6200EE',
+    backgroundColor: '#f1f1f1',
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  backButton: {
+    marginBottom: 12,
+  },
+  buttonText: { color: '#fff', fontSize: 16, textAlign: 'center' },
+  logout: {
+    marginTop: 20,
+    backgroundColor: '#ff4d4d',
+    padding: 12,
+    borderRadius: 8,
+  },
+  logoutText: { color: '#fff', fontSize: 16, textAlign: 'center' },
+});
